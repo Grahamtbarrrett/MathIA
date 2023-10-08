@@ -1,0 +1,90 @@
+import numpy as np
+import scipy.signal
+import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib.cm import get_cmap
+
+from copy import deepcopy
+from scipy.optimize import curve_fit
+from scipy.fft import fft, fftfreq, ifft
+#linear interpolation: array of y values and array of x values, both are discrete, want to find a abritery x value, assume that htey are in order,
+# taking all the values and finding the square distance, finding the smallest value(take the argument) >c ,
+# checkng to see if the one before or after is closer > linear interpolation, a is the amplitude of the sine wave
+#y(c+1)
+
+def lerp_function(array):
+    array = np.array(sorted(array, key=lambda x: x[0]))
+    def function(x, a):
+        if isinstance(x, float):
+            x_array = array[:, 0].flatten()
+            y_array = array[:, 1].flatten()
+            avg_y = np.mean(y_array)
+            closest_index = np.argmin(np.square(x_array - x))
+            if not closest_index: return y_array[0]
+            if closest_index == -1: return y_array[-1]
+            if abs(x_array[closest_index+1] - x) < abs(x_array[closest_index-1] - x):
+                low = closest_index
+                high = closest_index + 1
+            else:
+                low = closest_index - 1
+                high = closest_index
+            coeff = (x - x_array[low]) / (x_array[high] - x_array[low])
+            return np.real(a * ((coeff * y_array[low] + (1.0 - coeff) * y_array[high]) - avg_y) + avg_y)
+        else:
+            x_arr = deepcopy(x)
+            output = []
+            for x in x_arr:
+                x_array = array[:, 0].flatten()
+                y_array = array[:, 1].flatten()
+                avg_y = np.mean(y_array)
+                closest_index = np.argmin(np.square(x_array - x))
+                if not closest_index:
+                    output.append(y_array[0])
+                    continue
+                if closest_index >= len(y_array) - 1:
+                    output.append(y_array[-1])
+                    continue
+                if abs(x_array[closest_index + 1] - x) < abs(x_array[closest_index - 1] - x):
+                    low = closest_index
+                    high = closest_index + 1
+                else:
+                    low = closest_index - 1
+                    high = closest_index
+                coeff = (x - x_array[low]) / (x_array[high] - x_array[low])
+                output.append(np.real(a * ((coeff * y_array[low] + (1.0 - coeff) * y_array[high]) - avg_y) + avg_y))
+            return np.real(np.array(output))
+    return function
+
+
+plt.rcParams['figure.figsize'] = [8, 8]
+plt.rcParams.update({'font.size': 10})
+
+df = pd.read_csv('data.csv')
+# Create a NumPy array of data.
+data = np.array(df)
+days = []
+outtage = []
+for row in data:
+    days.append(row[0])
+    outtage.append(row[1])
+
+plt.plot(days, outtage)
+outtage_fft = np.array(fft(outtage))
+k = 11
+#mask turns all the freq into 0
+for _ in range(100):
+    try:
+        mask = np.zeros(outtage_fft.shape)
+        mask[:k] = 1
+
+        new_data = ifft(outtage_fft * mask)
+        function_fit = lerp_function(np.array([days, new_data]).transpose())
+        test_vals = np.linspace(0, days[-1], 10000)
+        test_out = function_fit(test_vals, 2.0)
+        plt.plot(test_vals, test_out)
+        k += 6
+    except:
+        break
+plt.show()
+
+breakpoint()
